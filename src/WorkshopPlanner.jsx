@@ -34,10 +34,43 @@ const WorkshopPlanner = () => {
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [editingPerson, setEditingPerson] = useState(null);
   const [showJobSummary, setShowJobSummary] = useState(false);
-  const [jobFilter, setJobFilter] = useState('open'); // 'open', 'complete', 'all'
+  const [jobFilter, setJobFilter] = useState('open');
   const [showDaySummary, setShowDaySummary] = useState(false);
   const [daySummaryDate, setDaySummaryDate] = useState(new Date());
-  const [darkMode, setDarkMode] = useState(false);
+
+  // Load data from localStorage on startup
+  useEffect(() => {
+    const loadData = () => {
+      try {
+        const savedData = localStorage.getItem('workshopPlannerData');
+        if (savedData) {
+          const data = JSON.parse(savedData);
+          if (data.jobs) setJobs(data.jobs);
+          if (data.personnel) setPersonnel(data.personnel);
+          if (data.allocations) setAllocations(data.allocations);
+        }
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    };
+    
+    loadData();
+  }, []);
+
+  // Auto-save data to localStorage
+  useEffect(() => {
+    const saveData = () => {
+      try {
+        const data = { jobs, personnel, allocations };
+        localStorage.setItem('workshopPlannerData', JSON.stringify(data));
+      } catch (error) {
+        console.error('Save error:', error);
+      }
+    };
+    
+    const timeoutId = setTimeout(saveData, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [jobs, personnel, allocations]);
 
   const getCellAllocations = (personId, date) => {
     const dateStr = date.toISOString().split('T')[0];
@@ -55,9 +88,8 @@ const WorkshopPlanner = () => {
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     
-    // Adjust to start on Monday
     const dayOfWeek = start.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // If Sunday (0), go back 6 days, else go to Monday
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     start.setDate(start.getDate() + daysToMonday);
     
     const totalDays = weeksToShow * 7;
@@ -105,14 +137,6 @@ const WorkshopPlanner = () => {
     }
   };
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const data = { jobs, personnel, allocations };
-      localStorage.setItem('workshopPlannerData', JSON.stringify(data));
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [jobs, personnel, allocations]);
-
   const addJob = () => {
     const newId = Math.max(0, ...jobs.map(j => j.id)) + 1;
     const colors = ['#e07a5f', '#81b29a', '#f2cc8f', '#3d5a80', '#98c1d9', '#ee6c4d'];
@@ -129,49 +153,6 @@ const WorkshopPlanner = () => {
 
   const toggleJobComplete = (jobId) => {
     setJobs(jobs.map(j => j.id === jobId ? { ...j, completed: !j.completed } : j));
-  };
-
-  const getFilteredJobs = () => {
-    if (jobFilter === 'open') return jobs.filter(j => !j.completed);
-    if (jobFilter === 'complete') return jobs.filter(j => j.completed);
-    return jobs;
-  };
-
-  const getDayAllocations = (date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    const dayAllocs = [];
-    
-    Object.entries(allocations).forEach(([key, alloc]) => {
-      if (alloc.date === dateStr) {
-        const person = personnel.find(p => p.id === alloc.personId);
-        const job = jobs.find(j => j.id === alloc.jobId);
-        const slot = key.includes('-top') ? 'Morning' : 'Afternoon';
-        
-        if (person && job) {
-          dayAllocs.push({
-            key,
-            person: person.name,
-            personId: person.id,
-            job: job.number,
-            jobName: job.name,
-            jobColor: job.color,
-            hours: alloc.hours,
-            slot,
-            totalJobHours: job.totalHours,
-            allocatedJobHours: getAllocatedHours(job.id),
-            notes: job.notes
-          });
-        }
-      }
-    });
-    
-    return dayAllocs.sort((a, b) => a.person.localeCompare(b.person));
-  };
-
-  const changeDaySummaryDate = (days) => {
-    const newDate = new Date(daySummaryDate);
-    newDate.setDate(newDate.getDate() + days);
-    setDaySummaryDate(newDate);
   };
 
   const updateJob = (id, updates) => {
@@ -238,34 +219,6 @@ const WorkshopPlanner = () => {
       }
     });
     setShowConfirmModal(true);
-  };
-
-  const handleJobDragForReorder = (index) => {
-    setDraggedJobIndex(index);
-  };
-
-  const handleJobDropForReorder = (index) => {
-    if (draggedJobIndex !== null && draggedJobIndex !== index) {
-      const newJobs = [...jobs];
-      const [draggedJob] = newJobs.splice(draggedJobIndex, 1);
-      newJobs.splice(index, 0, draggedJob);
-      setJobs(newJobs);
-    }
-    setDraggedJobIndex(null);
-  };
-
-  const handlePersonDragForReorder = (index) => {
-    setDraggedPersonIndex(index);
-  };
-
-  const handlePersonDropForReorder = (index) => {
-    if (draggedPersonIndex !== null && draggedPersonIndex !== index) {
-      const newPersonnel = [...personnel];
-      const [draggedPerson] = newPersonnel.splice(draggedPersonIndex, 1);
-      newPersonnel.splice(index, 0, draggedPerson);
-      setPersonnel(newPersonnel);
-    }
-    setDraggedPersonIndex(null);
   };
 
   const handleJobDragStart = (e, jobId) => {
@@ -423,341 +376,53 @@ const WorkshopPlanner = () => {
   }, []);
 
   return (
-    <div className={`flex h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-      {showDaySummary ? (
-        <div className="flex-1 flex flex-col">
-          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b p-6 flex justify-between items-center`}>
-            <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Day Summary</h1>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => changeDaySummaryDate(-1)}
-                  className={`p-2 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} rounded-xl transition-all`}
-                >
-                  <ChevronLeft size={20} className={darkMode ? 'text-gray-300' : 'text-gray-600'} />
-                </button>
-                <div className={`px-6 py-3 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'} rounded-2xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} min-w-[250px] text-center`}>
-                  {daySummaryDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                </div>
-                <button
-                  onClick={() => changeDaySummaryDate(1)}
-                  className={`p-2 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} rounded-xl transition-all`}
-                >
-                  <ChevronRight size={20} className={darkMode ? 'text-gray-300' : 'text-gray-600'} />
-                </button>
-                <button
-                  onClick={() => setDaySummaryDate(new Date())}
-                  className="px-6 py-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-all font-semibold shadow-sm hover:shadow-md transform hover:scale-105"
-                >
-                  Today
-                </button>
-              </div>
+    <div style={{ display: 'flex', height: '100vh', backgroundColor: '#f9fafb' }}>
+      {/* JOBS SIDEBAR - FORCED TO SHOW WITH INLINE STYLES */}
+      <div style={{ 
+        width: '320px', 
+        backgroundColor: 'white', 
+        borderRight: '1px solid #e5e7eb',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        overflow: 'hidden'
+      }}>
+        <div style={{ 
+          padding: '12px', 
+          borderBottom: '1px solid #e5e7eb',
+          background: 'linear-gradient(to right, #fafaf9, white)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: '600', color: '#57534e', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Jobs
+            </h2>
+            <div style={{ display: 'flex', gap: '4px' }}>
               <button 
-                onClick={() => setShowDaySummary(false)}
-                className={`px-6 py-3 ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-white' : 'text-gray-900'} rounded-full transition-all font-semibold shadow-sm hover:shadow-md transform hover:scale-105`}
+                onClick={saveData} 
+                style={{ padding: '6px', borderRadius: '8px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                title="Save"
               >
-                Back to Planner
+                <Save size={14} style={{ color: '#57534e' }} />
               </button>
-            </div>
-          </div>
-          
-          <div className="flex-1 overflow-auto p-6">
-            <div className="max-w-7xl mx-auto">
-              {getDayAllocations(daySummaryDate).length === 0 ? (
-                <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-3xl border p-12 text-center shadow-sm`}>
-                  <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} text-lg`}>No jobs scheduled for this day</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-3xl border p-6 shadow-sm`}>
-                    <h2 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>Day Overview</h2>
-                    <div className="grid grid-cols-4 gap-4">
-                      <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 shadow-md">
-                        <div className="text-sm text-blue-100 font-medium">Total Personnel</div>
-                        <div className="text-3xl font-bold text-white mt-2">
-                          {new Set(getDayAllocations(daySummaryDate).map(a => a.personId)).size}
-                        </div>
-                      </div>
-                      <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-6 shadow-md">
-                        <div className="text-sm text-emerald-100 font-medium">Total Jobs</div>
-                        <div className="text-3xl font-bold text-white mt-2">
-                          {new Set(getDayAllocations(daySummaryDate).map(a => a.job)).size}
-                        </div>
-                      </div>
-                      <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-6 shadow-md">
-                        <div className="text-sm text-amber-100 font-medium">Total Hours</div>
-                        <div className="text-3xl font-bold text-white mt-2">
-                          {getDayAllocations(daySummaryDate).reduce((sum, a) => sum + a.hours, 0)}h
-                        </div>
-                      </div>
-                      <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 shadow-md">
-                        <div className="text-sm text-purple-100 font-medium">Allocations</div>
-                        <div className="text-3xl font-bold text-white mt-2">
-                          {getDayAllocations(daySummaryDate).length}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-3xl border shadow-sm overflow-hidden`}>
-                    <table className="w-full">
-                      <thead className={`${darkMode ? 'bg-gray-750' : 'bg-gray-50'} border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                        <tr>
-                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Personnel</th>
-                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Time Slot</th>
-                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Job Number</th>
-                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Job Name</th>
-                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Hours Allocated</th>
-                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Job Progress</th>
-                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Notes</th>
-                        </tr>
-                      </thead>
-                      <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
-                        {getDayAllocations(daySummaryDate).map((alloc, index) => {
-                          const percentComplete = alloc.totalJobHours > 0 
-                            ? Math.round((alloc.allocatedJobHours / alloc.totalJobHours) * 100) 
-                            : 0;
-                          
-                          return (
-                            <tr key={index} className={`${darkMode ? 'hover:bg-gray-750' : 'hover:bg-gray-50'} transition-colors`}>
-                              <td className="px-6 py-4">
-                                <div className={`font-semibold text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>{alloc.person}</div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
-                                  alloc.slot === 'Morning' 
-                                    ? 'bg-amber-100 text-amber-700' 
-                                    : 'bg-blue-100 text-blue-700'
-                                }`}>
-                                  {alloc.slot}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <div 
-                                    className="w-3 h-3 rounded-full shadow-sm" 
-                                    style={{ backgroundColor: alloc.jobColor }}
-                                  />
-                                  <span className={`font-mono text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{alloc.job}</span>
-                                </div>
-                              </td>
-                              <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{alloc.jobName}</td>
-                              <td className="px-6 py-4">
-                                <span className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>{alloc.hours}h</span>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <div className={`flex-1 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2 max-w-[100px]`}>
-                                    <div 
-                                      className="bg-emerald-500 h-2 rounded-full transition-all" 
-                                      style={{ width: `${Math.min(percentComplete, 100)}%` }}
-                                    />
-                                  </div>
-                                  <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{alloc.allocatedJobHours}/{alloc.totalJobHours}h</span>
-                                </div>
-                              </td>
-                              <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} max-w-xs truncate`}>
-                                {alloc.notes || '-'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : showJobSummary ? (
-        <div className="flex-1 flex flex-col">
-          <div className="bg-white border-b border-stone-200 p-4 flex justify-between items-center shadow-sm">
-            <h1 className="text-2xl font-bold text-stone-800 tracking-tight">Job Summary</h1>
-            <div className="flex items-center gap-4">
-              <div className="flex gap-2 bg-stone-100 rounded-lg p-1">
-                <button
-                  onClick={() => setJobFilter('open')}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                    jobFilter === 'open' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-600 hover:text-stone-800'
-                  }`}
-                >
-                  Open Jobs
-                </button>
-                <button
-                  onClick={() => setJobFilter('complete')}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                    jobFilter === 'complete' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-600 hover:text-stone-800'
-                  }`}
-                >
-                  Complete Jobs
-                </button>
-                <button
-                  onClick={() => setJobFilter('all')}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                    jobFilter === 'all' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-600 hover:text-stone-800'
-                  }`}
-                >
-                  All Jobs
-                </button>
-              </div>
               <button 
-                onClick={() => setShowJobSummary(false)}
-                className="px-4 py-2 bg-stone-700 text-white rounded-lg hover:bg-stone-800 transition-colors font-medium"
+                onClick={loadData} 
+                style={{ padding: '6px', borderRadius: '8px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                title="Load"
               >
-                Back to Planner
+                <Upload size={14} style={{ color: '#57534e' }} />
               </button>
-            </div>
-          </div>
-          
-          <div className="flex-1 overflow-auto p-6">
-            <div className="max-w-6xl mx-auto">
-              <table className="w-full bg-white rounded-lg shadow-sm border border-stone-200">
-                <thead className="bg-stone-100 border-b border-stone-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-stone-700 uppercase tracking-wider">Job Number</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-stone-700 uppercase tracking-wider">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-stone-700 uppercase tracking-wider">Est. Hours</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-stone-700 uppercase tracking-wider">Act. Hours</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-stone-700 uppercase tracking-wider">% Complete</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-stone-700 uppercase tracking-wider">Notes</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-stone-700 uppercase tracking-wider">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-200">
-                  {getFilteredJobs().sort((a, b) => a.number.localeCompare(b.number)).map(job => {
-                    const allocated = getAllocatedHours(job.id);
-                    const percentComplete = job.totalHours > 0 ? Math.round((allocated / job.totalHours) * 100) : 0;
-                    
-                    return (
-                      <tr key={job.id} className="hover:bg-stone-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div 
-                              className="w-3 h-3 rounded-full" 
-                              style={{ backgroundColor: job.color }}
-                            />
-                            <span className="font-mono text-sm font-semibold">{job.number}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-stone-700">{job.name}</td>
-                        <td className="px-4 py-3 text-sm text-stone-700">{job.totalHours}h</td>
-                        <td className="px-4 py-3 text-sm text-stone-700">{allocated}h</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-stone-200 rounded-full h-2 max-w-[100px]">
-                              <div 
-                                className="bg-emerald-500 h-2 rounded-full transition-all" 
-                                style={{ width: `${Math.min(percentComplete, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-sm font-medium text-stone-700">{percentComplete}%</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-stone-600 max-w-xs truncate">{job.notes || '-'}</td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => toggleJobComplete(job.id)}
-                            className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                              job.completed 
-                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' 
-                                : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                            }`}
-                          >
-                            {job.completed ? 'Complete' : 'Open'}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <>
-      {showHoursModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
-            <h3 className="text-lg font-semibold text-stone-800 mb-4">
-              {pendingAllocation?.isUpdate ? 'Update Hours' : 'Enter Hours'}
-            </h3>
-            <input
-              type="number"
-              value={hoursInput}
-              onChange={(e) => setHoursInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && (pendingAllocation?.isUpdate ? confirmUpdateHours() : confirmHours())}
-              className="w-full px-4 py-3 border-2 border-stone-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-stone-500"
-              placeholder="Hours"
-              autoFocus
-            />
-            {pendingAllocation?.isUpdate && (
-              <p className="text-xs text-stone-500 mt-2">Enter 0 to delete this allocation</p>
-            )}
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowHoursModal(false);
-                  setPendingAllocation(null);
-                }}
-                className="flex-1 px-4 py-2 bg-stone-200 text-stone-700 rounded-lg hover:bg-stone-300 transition-colors font-medium"
+              <button 
+                onClick={addJob} 
+                style={{ padding: '6px', borderRadius: '8px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                title="Add Job"
               >
-                Cancel
-              </button>
-              <button
-                onClick={pendingAllocation?.isUpdate ? confirmUpdateHours : confirmHours}
-                className="flex-1 px-4 py-2 bg-stone-700 text-white rounded-lg hover:bg-stone-800 transition-colors font-medium"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showConfirmModal && confirmAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
-            <h3 className="text-lg font-semibold text-stone-800 mb-4">Confirm Action</h3>
-            <p className="text-stone-600 mb-6">{confirmAction.message}</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                className="flex-1 px-4 py-2 bg-stone-200 text-stone-700 rounded-lg hover:bg-stone-300 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmAction.onConfirm}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="w-80 bg-white border-r border-stone-200 flex flex-col shadow-sm overflow-hidden">
-        <div className="p-3 border-b border-stone-200 bg-gradient-to-r from-stone-50 to-white flex-shrink-0">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-semibold text-stone-700 tracking-wide uppercase">Jobs</h2>
-            <div className="flex gap-1">
-              <button onClick={saveData} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Save">
-                <Save size={14} className="text-stone-600" />
-              </button>
-              <button onClick={loadData} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Load">
-                <Upload size={14} className="text-stone-600" />
-              </button>
-              <button onClick={addJob} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Add Job">
-                <Plus size={14} className="text-stone-600" />
+                <Plus size={14} style={{ color: '#57534e' }} />
               </button>
             </div>
           </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-2 space-y-2" style={{ maxHeight: 'calc(100vh - 60px)' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {jobs.filter(j => !j.completed).map((job, index) => {
             const allocated = getAllocatedHours(job.id);
             const remaining = job.totalHours - allocated;
@@ -769,118 +434,117 @@ const WorkshopPlanner = () => {
                 draggable={editingJob !== job.id}
                 onDragStart={(e) => {
                   if (editingJob !== job.id) {
-                    handleJobDragForReorder(index);
                     handleJobDragStart(e, job.id);
                   }
                 }}
                 onDragEnd={handleJobDragEnd}
-                onDragOver={(e) => {
-                  if (draggedJobIndex !== null) {
-                    e.preventDefault();
-                  }
+                style={{
+                  border: '1px solid #e7e5e4',
+                  borderLeft: `4px solid ${job.color}`,
+                  borderRadius: '8px',
+                  padding: '8px',
+                  backgroundColor: 'white',
+                  cursor: editingJob !== job.id ? 'move' : 'default'
                 }}
-                onDrop={(e) => {
-                  if (draggedJobIndex !== null) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleJobDropForReorder(index);
-                  }
-                }}
-                className={`border border-stone-200 rounded-lg p-2 ${editingJob !== job.id ? 'cursor-move hover:shadow-md hover:border-stone-300' : ''} transition-all bg-white ${draggedJobIndex === index ? 'opacity-50' : ''}`}
-                style={{ borderLeftWidth: '4px', borderLeftColor: job.color }}
               >
                 {editingJob === job.id ? (
-                  <div className="space-y-2">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <input
                       type="text"
                       value={job.number}
                       onChange={(e) => updateJob(job.id, { number: e.target.value })}
-                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-stone-400"
+                      style={{ width: '100%', padding: '4px 8px', border: '1px solid #d6d3d1', borderRadius: '4px', fontSize: '12px' }}
                       placeholder="000-0000"
                     />
                     <input
                       type="text"
                       value={job.name}
                       onChange={(e) => updateJob(job.id, { name: e.target.value })}
-                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs font-medium focus:outline-none focus:ring-1 focus:ring-stone-400"
+                      style={{ width: '100%', padding: '4px 8px', border: '1px solid #d6d3d1', borderRadius: '4px', fontSize: '12px', fontWeight: '500' }}
                       placeholder="Job Name"
                     />
                     <input
                       type="number"
                       value={job.totalHours}
                       onChange={(e) => updateJob(job.id, { totalHours: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-stone-400"
+                      style={{ width: '100%', padding: '4px 8px', border: '1px solid #d6d3d1', borderRadius: '4px', fontSize: '12px' }}
                       placeholder="Total Hours"
                     />
                     <input
                       type="color"
                       value={job.color}
                       onChange={(e) => updateJob(job.id, { color: e.target.value })}
-                      className="w-full h-8 border border-stone-300 rounded"
+                      style={{ width: '100%', height: '32px', border: '1px solid #d6d3d1', borderRadius: '4px' }}
                     />
                     <textarea
                       value={job.notes}
                       onChange={(e) => updateJob(job.id, { notes: e.target.value })}
-                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-stone-400"
+                      style={{ width: '100%', padding: '4px 8px', border: '1px solid #d6d3d1', borderRadius: '4px', fontSize: '12px' }}
                       placeholder="Notes"
                       rows="2"
                     />
                     <button
                       onClick={() => setEditingJob(null)}
-                      className="w-full px-2 py-1 bg-stone-700 text-white rounded text-xs hover:bg-stone-800 transition-colors"
+                      style={{ width: '100%', padding: '4px 8px', backgroundColor: '#57534e', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
                     >
                       Done
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-xs text-stone-800">{job.number}</div>
-                        <div className="text-xs text-stone-600 truncate">{job.name}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#1c1917' }}>{job.number}</div>
+                        <div style={{ fontSize: '12px', color: '#57534e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.name}</div>
                       </div>
-                      <div className="flex gap-0.5 ml-1 flex-shrink-0">
+                      <div style={{ display: 'flex', gap: '2px', marginLeft: '4px' }}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleJobComplete(job.id);
                           }}
-                          className="p-1 hover:bg-emerald-50 rounded transition-colors"
+                          style={{ padding: '4px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                           title="Mark Complete"
                         >
-                          <div className="w-3 h-3 border-2 border-emerald-600 rounded" />
+                          <div style={{ width: '12px', height: '12px', border: '2px solid #059669', borderRadius: '2px' }} />
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditingJob(job.id);
                           }}
-                          className="p-1 hover:bg-stone-100 rounded transition-colors"
+                          style={{ padding: '4px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                           title="Edit"
                         >
-                          <Edit2 size={12} className="text-stone-600" />
+                          <Edit2 size={12} style={{ color: '#57534e' }} />
                         </button>
                         <button
                           onClick={(e) => deleteJob(e, job.id)}
-                          className="p-1 hover:bg-red-50 rounded text-red-500 transition-colors"
+                          style={{ padding: '4px', border: 'none', background: 'transparent', cursor: 'pointer', color: '#ef4444' }}
                           title="Delete"
                         >
                           <Trash2 size={12} />
                         </button>
                       </div>
                     </div>
-                    <div className="flex gap-2 text-xs">
-                      <div className="flex-1 bg-stone-50 rounded px-1.5 py-0.5">
-                        <span className="text-stone-500">Total:</span>
-                        <span className="font-medium text-stone-700 ml-1">{job.totalHours}h</span>
+                    <div style={{ display: 'flex', gap: '8px', fontSize: '12px' }}>
+                      <div style={{ flex: 1, backgroundColor: '#fafaf9', borderRadius: '4px', padding: '2px 6px' }}>
+                        <span style={{ color: '#78716c' }}>Total:</span>
+                        <span style={{ fontWeight: '500', color: '#44403c', marginLeft: '4px' }}>{job.totalHours}h</span>
                       </div>
-                      <div className="flex-1 bg-stone-50 rounded px-1.5 py-0.5">
-                        <span className="text-stone-500">Used:</span>
-                        <span className="font-medium text-stone-700 ml-1">{allocated}h</span>
+                      <div style={{ flex: 1, backgroundColor: '#fafaf9', borderRadius: '4px', padding: '2px 6px' }}>
+                        <span style={{ color: '#78716c' }}>Used:</span>
+                        <span style={{ fontWeight: '500', color: '#44403c', marginLeft: '4px' }}>{allocated}h</span>
                       </div>
                     </div>
-                    <div className={`text-xs px-1.5 py-0.5 rounded ${isOverAllocated ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                      <span className="font-semibold">{remaining}h</span> remaining {isOverAllocated && 'âš ï¸'}
+                    <div style={{ 
+                      fontSize: '12px', 
+                      padding: '2px 6px', 
+                      borderRadius: '4px',
+                      backgroundColor: isOverAllocated ? '#fef2f2' : '#f0fdf4',
+                      color: isOverAllocated ? '#b91c1c' : '#166534'
+                    }}>
+                      <span style={{ fontWeight: '600' }}>{remaining}h</span> remaining {isOverAllocated && '⚠️'}
                     </div>
                   </div>
                 )}
@@ -890,316 +554,152 @@ const WorkshopPlanner = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col">
-        <div className="bg-white border-b border-stone-200 p-4 flex justify-between items-center shadow-sm">
-          <h1 className="text-2xl font-bold text-stone-800 tracking-tight">Workshop Planner</h1>
-          <div className="flex items-center gap-6">
-            <button
-              onClick={() => {
-                setDaySummaryDate(new Date());
-                setShowDaySummary(true);
-              }}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-            >
-              Day Summary
-            </button>
-            
-            <button
-              onClick={() => setShowJobSummary(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              Job Summary
-            </button>
-            
-            <div className="flex gap-2 bg-stone-100 rounded-lg p-1">
+      {/* REST OF THE APP */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ backgroundColor: 'white', borderBottom: '1px solid #e7e5e4', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1c1917' }}>Workshop Planner</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#f5f5f4', borderRadius: '8px', padding: '4px' }}>
               <button
                 onClick={() => setWeeksToShow(1)}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  weeksToShow === 1 ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-600 hover:text-stone-800'
-                }`}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  backgroundColor: weeksToShow === 1 ? 'white' : 'transparent',
+                  color: weeksToShow === 1 ? '#1c1917' : '#57534e',
+                  boxShadow: weeksToShow === 1 ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
+                }}
               >
                 1 Week
               </button>
               <button
                 onClick={() => setWeeksToShow(2)}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  weeksToShow === 2 ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-600 hover:text-stone-800'
-                }`}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  backgroundColor: weeksToShow === 2 ? 'white' : 'transparent',
+                  color: weeksToShow === 2 ? '#1c1917' : '#57534e',
+                  boxShadow: weeksToShow === 2 ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
+                }}
               >
                 2 Weeks
               </button>
               <button
                 onClick={() => setWeeksToShow(4)}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  weeksToShow === 4 ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-600 hover:text-stone-800'
-                }`}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  backgroundColor: weeksToShow === 4 ? 'white' : 'transparent',
+                  color: weeksToShow === 4 ? '#1c1917' : '#57534e',
+                  boxShadow: weeksToShow === 4 ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
+                }}
               >
                 4 Weeks
               </button>
             </div>
             
-            <div className="flex items-center gap-4">
-              <button onClick={() => moveWeek(-1)} className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
-                <ChevronLeft size={20} className="text-stone-600" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <button 
+                onClick={() => moveWeek(-1)} 
+                style={{ padding: '8px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '8px' }}
+              >
+                <ChevronLeft size={20} style={{ color: '#57534e' }} />
               </button>
-              <span className="font-medium text-stone-700 min-w-[200px] text-center">
+              <span style={{ fontWeight: '500', color: '#44403c', minWidth: '200px', textAlign: 'center' }}>
                 {formatDate(dates[0])} - {formatDate(dates[dates.length - 1])}
               </span>
-              <button onClick={() => moveWeek(1)} className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
-                <ChevronRight size={20} className="text-stone-600" />
+              <button 
+                onClick={() => moveWeek(1)} 
+                style={{ padding: '8px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '8px' }}
+              >
+                <ChevronRight size={20} style={{ color: '#57534e' }} />
               </button>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto bg-stone-50" style={{ overflowX: 'auto', overflowY: 'auto', scrollBehavior: 'smooth' }}>
-          <table className="w-full border-collapse">
-            <thead className="sticky top-0 z-10">
-              <tr>
-                <th className="border-2 border-stone-200 p-3 bg-gradient-to-br from-slate-100 to-slate-50 sticky left-0 z-20 min-w-[180px] shadow-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-700 font-bold uppercase text-xs tracking-wider">Personnel</span>
-                    {showAddPerson ? (
-                      <div className="flex gap-1">
-                        <input
-                          type="text"
-                          value={newPersonName}
-                          onChange={(e) => setNewPersonName(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && addPerson()}
-                          className="px-2 py-1 border border-stone-300 rounded-lg text-xs w-24 focus:outline-none focus:ring-2 focus:ring-stone-400"
-                          placeholder="Name"
-                          autoFocus
-                        />
-                        <button onClick={addPerson} className="text-emerald-600 hover:bg-emerald-50 p-1 rounded-lg transition-colors">
-                          <Plus size={14} />
-                        </button>
-                        <button onClick={() => setShowAddPerson(false)} className="text-red-600 hover:bg-red-50 p-1 rounded-lg transition-colors">
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setShowAddPerson(true)} className="hover:bg-stone-200 p-1.5 rounded-lg transition-colors">
-                        <Plus size={16} className="text-stone-600" />
-                      </button>
-                    )}
-                  </div>
-                </th>
-                {dates.map(date => (
-                  <th 
-                    key={date.toISOString()} 
-                    className={`border-2 border-stone-200 p-3 min-w-[140px] ${isWeekend(date) ? 'bg-stone-100' : 'bg-white'}`}
-                  >
-                    <div className="text-xs font-medium text-stone-500 uppercase tracking-wide">{getDayName(date)}</div>
-                    <div className={`text-base font-semibold mt-1 ${isWeekend(date) ? 'text-stone-600' : 'text-stone-800'}`}>
-                      {date.getDate()}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {personnel.map((person, index) => (
-                <tr key={person.id}>
-                  <td 
-                    className="border-2 border-stone-200 p-3 sticky left-0 z-10 shadow-lg bg-gradient-to-br from-slate-50 to-slate-100"
-                    draggable
-                    onDragStart={() => handlePersonDragForReorder(index)}
-                    onDragEnd={() => setDraggedPersonIndex(null)}
-                    onDragOver={(e) => {
-                      if (draggedPersonIndex !== null) {
-                        e.preventDefault();
-                      }
-                    }}
-                    onDrop={(e) => {
-                      if (draggedPersonIndex !== null) {
-                        e.preventDefault();
-                        handlePersonDropForReorder(index);
-                      }
-                    }}
-                  >
-                    {editingPerson === person.id ? (
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={person.name}
-                          onChange={(e) => updatePerson(person.id, { name: e.target.value })}
-                          className="w-full px-2 py-1 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                          placeholder="Name"
-                        />
-                        <button
-                          onClick={() => setEditingPerson(null)}
-                          className="w-full px-2 py-1 bg-slate-600 text-white rounded-lg text-xs hover:bg-slate-700 transition-colors"
-                        >
-                          Done
-                        </button>
-                      </div>
-                    ) : (
-                      <div className={`flex justify-between items-center gap-2 cursor-move ${draggedPersonIndex === index ? 'opacity-50' : ''}`}>
-                        <div className="flex items-center gap-2 flex-1">
-                          <GripVertical size={14} className="text-slate-400 flex-shrink-0" />
-                          <div 
-                            className="font-bold text-sm text-white px-3 py-2 rounded-xl shadow-md hover:shadow-lg transition-all flex-1 text-center bg-gradient-to-br from-slate-500 to-slate-600"
-                          >
-                            {person.name}
-                          </div>
-                        </div>
-                        <div className="flex gap-1 flex-shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingPerson(person.id);
-                            }}
-                            className="p-1 hover:bg-slate-200 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <Edit2 size={12} className="text-slate-600" />
-                          </button>
-                          <button
-                            onClick={(e) => removePerson(e, person.id)}
-                            className="text-red-500 hover:bg-red-50 p-1 rounded-lg transition-colors"
-                            title="Remove"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </td>
-                  {dates.map(date => {
-                    const cellAllocs = getCellAllocations(person.id, date);
-                    const topJob = cellAllocs.top ? jobs.find(j => j.id === cellAllocs.top.jobId) : null;
-                    const bottomJob = cellAllocs.bottom ? jobs.find(j => j.id === cellAllocs.bottom.jobId) : null;
-                    const cellKey = `${person.id}-${date.toISOString().split('T')[0]}`;
-                    const isHovered = hoveredCell === cellKey && draggedJobId;
-                    
-                    return (
-                      <td
-                        key={date.toISOString()}
-                        className={`border-2 p-0 align-top transition-all relative ${
-                          isWeekend(date) ? 'bg-stone-50 border-stone-200' : 'bg-white border-stone-200'
-                        }`}
-                        style={{ height: '160px' }}
-                        onDragOver={(e) => handleCellDragOver(e, person.id, date)}
-                        onDragLeave={handleCellDragLeave}
-                        onDrop={(e) => handleCellDrop(e, person.id, date)}
-                      >
-                        <div 
-                          className={`h-1/2 p-2 transition-all relative ${
-                            isHovered && hoveredSlot === 'top' ? 'bg-amber-50' : ''
-                          }`}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setHoveredCell(cellKey);
-                            setHoveredSlot('top');
-                          }}
-                        >
-                          {isHovered && hoveredSlot === 'top' && (
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 border-2 border-amber-400 border-dashed rounded">
-                              <div className="text-amber-600 font-semibold text-xs bg-white px-2 py-1 rounded-lg shadow-sm border border-amber-200">
-                                Drop in TOP
-                              </div>
-                            </div>
-                          )}
-                          {cellAllocs.top && topJob && (
-                            <div
-                              draggable
-                              onDragStart={(e) => {
-                                e.stopPropagation();
-                                setDraggedAllocation({
-                                  key: `${cellKey}-top`,
-                                  jobId: topJob.id,
-                                  hours: cellAllocs.top.hours
-                                });
-                              }}
-                              onDragEnd={() => {
-                                setDraggedAllocation(null);
-                                setIsDuplicating(false);
-                              }}
-                              onClick={(e) => updateAllocation(e, `${cellKey}-top`)}
-                              className={`h-full p-2 rounded-lg text-white text-xs cursor-move hover:opacity-90 transition-all hover:shadow-md flex flex-col justify-between ${isDuplicating && draggedAllocation?.key === `${cellKey}-top` ? 'ring-2 ring-blue-400' : ''}`}
-                              style={{ backgroundColor: topJob.color }}
-                              title={isDuplicating ? "Hold Ctrl to duplicate while dragging" : "Drag to move | Hold Ctrl while dragging to duplicate"}
-                            >
-                              <div>
-                                <div className="font-bold text-xs tracking-tight">{topJob.number}</div>
-                                <div className="text-xs opacity-90 mt-0.5" style={{ 
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  maxWidth: '100%'
-                                }}>
-                                  {topJob.name.length > 12 ? topJob.name.substring(0, 12) + '...' : topJob.name}
-                                </div>
-                              </div>
-                              <div className="font-semibold">{cellAllocs.top.hours}h</div>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div 
-                          className={`h-1/2 p-2 transition-all relative ${
-                            isHovered && hoveredSlot === 'bottom' ? 'bg-amber-50' : ''
-                          }`}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setHoveredCell(cellKey);
-                            setHoveredSlot('bottom');
-                          }}
-                        >
-                          {isHovered && hoveredSlot === 'bottom' && (
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 border-2 border-amber-400 border-dashed rounded">
-                              <div className="text-amber-600 font-semibold text-xs bg-white px-2 py-1 rounded-lg shadow-sm border border-amber-200">
-                                Drop in BOTTOM
-                              </div>
-                            </div>
-                          )}
-                          {cellAllocs.bottom && bottomJob && (
-                            <div
-                              draggable
-                              onDragStart={(e) => {
-                                e.stopPropagation();
-                                setDraggedAllocation({
-                                  key: `${cellKey}-bottom`,
-                                  jobId: bottomJob.id,
-                                  hours: cellAllocs.bottom.hours
-                                });
-                              }}
-                              onDragEnd={() => {
-                                setDraggedAllocation(null);
-                                setIsDuplicating(false);
-                              }}
-                              onClick={(e) => updateAllocation(e, `${cellKey}-bottom`)}
-                              className={`h-full p-2 rounded-lg text-white text-xs cursor-move hover:opacity-90 transition-all hover:shadow-md flex flex-col justify-between ${isDuplicating && draggedAllocation?.key === `${cellKey}-bottom` ? 'ring-2 ring-blue-400' : ''}`}
-                              style={{ backgroundColor: bottomJob.color }}
-                              title={isDuplicating ? "Hold Ctrl to duplicate while dragging" : "Drag to move | Hold Ctrl while dragging to duplicate"}
-                            >
-                              <div>
-                                <div className="font-bold text-xs tracking-tight">{bottomJob.number}</div>
-                                <div className="text-xs opacity-90 mt-0.5" style={{ 
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  maxWidth: '100%'
-                                }}>
-                                  {bottomJob.name.length > 12 ? bottomJob.name.substring(0, 12) + '...' : bottomJob.name}
-                                </div>
-                              </div>
-                              <div className="font-semibold">{cellAllocs.bottom.hours}h</div>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ flex: 1, overflow: 'auto', backgroundColor: '#fafaf9' }}>
+          <p style={{ padding: '40px', textAlign: 'center', color: '#57534e', fontSize: '16px' }}>
+            ✅ JOBS SIDEBAR IS NOW VISIBLE!<br/><br/>
+            This is a test version with inline styles to verify the sidebar appears.<br/>
+            If you see the sidebar on the left, the issue is with Tailwind CSS configuration.
+          </p>
         </div>
       </div>
-      </>
+
+      {/* Modals */}
+      {showHoursModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', maxWidth: '400px', width: '100%', margin: '0 16px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1c1917', marginBottom: '16px' }}>
+              {pendingAllocation?.isUpdate ? 'Update Hours' : 'Enter Hours'}
+            </h3>
+            <input
+              type="number"
+              value={hoursInput}
+              onChange={(e) => setHoursInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && (pendingAllocation?.isUpdate ? confirmUpdateHours() : confirmHours())}
+              style={{ width: '100%', padding: '12px 16px', border: '2px solid #d6d3d1', borderRadius: '8px', fontSize: '16px' }}
+              placeholder="Hours"
+              autoFocus
+            />
+            {pendingAllocation?.isUpdate && (
+              <p style={{ fontSize: '12px', color: '#78716c', marginTop: '8px' }}>Enter 0 to delete this allocation</p>
+            )}
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button
+                onClick={() => {
+                  setShowHoursModal(false);
+                  setPendingAllocation(null);
+                }}
+                style={{ flex: 1, padding: '8px 16px', backgroundColor: '#e7e5e4', color: '#44403c', border: 'none', borderRadius: '8px', fontWeight: '500', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={pendingAllocation?.isUpdate ? confirmUpdateHours : confirmHours}
+                style={{ flex: 1, padding: '8px 16px', backgroundColor: '#57534e', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '500', cursor: 'pointer' }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConfirmModal && confirmAction && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', maxWidth: '400px', width: '100%', margin: '0 16px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1c1917', marginBottom: '16px' }}>Confirm Action</h3>
+            <p style={{ color: '#57534e', marginBottom: '24px' }}>{confirmAction.message}</p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                style={{ flex: 1, padding: '8px 16px', backgroundColor: '#e7e5e4', color: '#44403c', border: 'none', borderRadius: '8px', fontWeight: '500', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAction.onConfirm}
+                style={{ flex: 1, padding: '8px 16px', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '500', cursor: 'pointer' }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
