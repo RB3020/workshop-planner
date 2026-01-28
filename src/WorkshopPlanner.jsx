@@ -21,7 +21,6 @@ const WorkshopPlanner = () => {
   const [newPersonName, setNewPersonName] = useState('');
   const [hoveredCell, setHoveredCell] = useState(null);
   const [weeksToShow, setWeeksToShow] = useState(2);
-  const [isLoading, setIsLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState('');
   
   const [showHoursModal, setShowHoursModal] = useState(false);
@@ -40,50 +39,33 @@ const WorkshopPlanner = () => {
   const [showDaySummary, setShowDaySummary] = useState(false);
   const [daySummaryDate, setDaySummaryDate] = useState(new Date());
 
-  // Load data from shared storage on startup
+  // Load data from localStorage on startup
   useEffect(() => {
-    const loadSharedData = async () => {
-      setIsLoading(true);
+    const loadData = () => {
       try {
-        // Load jobs
-        const jobsResult = await window.storage.get('workshop-jobs', true);
-        if (jobsResult) {
-          setJobs(JSON.parse(jobsResult.value));
+        const savedData = localStorage.getItem('workshopPlannerData');
+        if (savedData) {
+          const data = JSON.parse(savedData);
+          if (data.jobs) setJobs(data.jobs);
+          if (data.personnel) setPersonnel(data.personnel);
+          if (data.allocations) setAllocations(data.allocations);
+          setSaveStatus('✓ Data loaded');
+          setTimeout(() => setSaveStatus(''), 2000);
         }
-        
-        // Load personnel
-        const personnelResult = await window.storage.get('workshop-personnel', true);
-        if (personnelResult) {
-          setPersonnel(JSON.parse(personnelResult.value));
-        }
-        
-        // Load allocations
-        const allocationsResult = await window.storage.get('workshop-allocations', true);
-        if (allocationsResult) {
-          setAllocations(JSON.parse(allocationsResult.value));
-        }
-        
-        setSaveStatus('Data loaded successfully');
-        setTimeout(() => setSaveStatus(''), 2000);
       } catch (error) {
-        console.log('First time loading - using default data');
-      } finally {
-        setIsLoading(false);
+        console.error('Error loading data:', error);
       }
     };
     
-    loadSharedData();
+    loadData();
   }, []);
 
-  // Auto-save data to shared storage
+  // Auto-save data to localStorage
   useEffect(() => {
-    if (isLoading) return;
-    
-    const saveSharedData = async () => {
+    const saveData = () => {
       try {
-        await window.storage.set('workshop-jobs', JSON.stringify(jobs), true);
-        await window.storage.set('workshop-personnel', JSON.stringify(personnel), true);
-        await window.storage.set('workshop-allocations', JSON.stringify(allocations), true);
+        const data = { jobs, personnel, allocations };
+        localStorage.setItem('workshopPlannerData', JSON.stringify(data));
         setSaveStatus('✓ Saved');
         setTimeout(() => setSaveStatus(''), 2000);
       } catch (error) {
@@ -92,9 +74,9 @@ const WorkshopPlanner = () => {
       }
     };
     
-    const timeoutId = setTimeout(saveSharedData, 1000);
+    const timeoutId = setTimeout(saveData, 1000);
     return () => clearTimeout(timeoutId);
-  }, [jobs, personnel, allocations, isLoading]);
+  }, [jobs, personnel, allocations]);
 
   const getCellAllocations = (personId, date) => {
     const dateStr = date.toISOString().split('T')[0];
@@ -136,6 +118,29 @@ const WorkshopPlanner = () => {
       }
     });
     return total;
+  };
+
+  const saveData = () => {
+    const data = { jobs, personnel, allocations };
+    localStorage.setItem('workshopPlannerData', JSON.stringify(data));
+    alert('Data saved successfully!');
+  };
+
+  const loadData = () => {
+    const saved = localStorage.getItem('workshopPlannerData');
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        setJobs(data.jobs || []);
+        setPersonnel(data.personnel || []);
+        setAllocations(data.allocations || {});
+        alert('Data loaded successfully!');
+      } catch (e) {
+        alert('Error loading data');
+      }
+    } else {
+      alert('No saved data found');
+    }
   };
 
   const addJob = () => {
@@ -446,17 +451,6 @@ const WorkshopPlanner = () => {
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4"></div>
-          <p className="text-gray-600 text-lg">Loading Workshop Planner...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -787,6 +781,12 @@ const WorkshopPlanner = () => {
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-semibold text-stone-700 tracking-wide uppercase">Jobs</h2>
             <div className="flex gap-1">
+              <button onClick={saveData} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Save">
+                <Save size={14} className="text-stone-600" />
+              </button>
+              <button onClick={loadData} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Load">
+                <Upload size={14} className="text-stone-600" />
+              </button>
               <button onClick={addJob} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Add Job">
                 <Plus size={14} className="text-stone-600" />
               </button>
