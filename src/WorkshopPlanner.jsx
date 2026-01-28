@@ -21,7 +21,6 @@ const WorkshopPlanner = () => {
   const [newPersonName, setNewPersonName] = useState('');
   const [hoveredCell, setHoveredCell] = useState(null);
   const [weeksToShow, setWeeksToShow] = useState(2);
-  const [saveStatus, setSaveStatus] = useState('');
   
   const [showHoursModal, setShowHoursModal] = useState(false);
   const [hoursInput, setHoursInput] = useState('8');
@@ -35,48 +34,10 @@ const WorkshopPlanner = () => {
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [editingPerson, setEditingPerson] = useState(null);
   const [showJobSummary, setShowJobSummary] = useState(false);
-  const [jobFilter, setJobFilter] = useState('open');
+  const [jobFilter, setJobFilter] = useState('open'); // 'open', 'complete', 'all'
   const [showDaySummary, setShowDaySummary] = useState(false);
   const [daySummaryDate, setDaySummaryDate] = useState(new Date());
-
-  // Load data from localStorage on startup
-  useEffect(() => {
-    const loadData = () => {
-      try {
-        const savedData = localStorage.getItem('workshopPlannerData');
-        if (savedData) {
-          const data = JSON.parse(savedData);
-          if (data.jobs) setJobs(data.jobs);
-          if (data.personnel) setPersonnel(data.personnel);
-          if (data.allocations) setAllocations(data.allocations);
-          setSaveStatus('✓ Data loaded');
-          setTimeout(() => setSaveStatus(''), 2000);
-        }
-      } catch (error) {
-        console.error('Error loading data:', error);
-      }
-    };
-    
-    loadData();
-  }, []);
-
-  // Auto-save data to localStorage
-  useEffect(() => {
-    const saveData = () => {
-      try {
-        const data = { jobs, personnel, allocations };
-        localStorage.setItem('workshopPlannerData', JSON.stringify(data));
-        setSaveStatus('✓ Saved');
-        setTimeout(() => setSaveStatus(''), 2000);
-      } catch (error) {
-        setSaveStatus('⚠ Save failed');
-        console.error('Save error:', error);
-      }
-    };
-    
-    const timeoutId = setTimeout(saveData, 1000);
-    return () => clearTimeout(timeoutId);
-  }, [jobs, personnel, allocations]);
+  const [darkMode, setDarkMode] = useState(false);
 
   const getCellAllocations = (personId, date) => {
     const dateStr = date.toISOString().split('T')[0];
@@ -94,8 +55,9 @@ const WorkshopPlanner = () => {
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     
+    // Adjust to start on Monday
     const dayOfWeek = start.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // If Sunday (0), go back 6 days, else go to Monday
     start.setDate(start.getDate() + daysToMonday);
     
     const totalDays = weeksToShow * 7;
@@ -142,6 +104,14 @@ const WorkshopPlanner = () => {
       alert('No saved data found');
     }
   };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const data = { jobs, personnel, allocations };
+      localStorage.setItem('workshopPlannerData', JSON.stringify(data));
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [jobs, personnel, allocations]);
 
   const addJob = () => {
     const newId = Math.max(0, ...jobs.map(j => j.id)) + 1;
@@ -453,34 +423,27 @@ const WorkshopPlanner = () => {
   }, []);
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Save Status Indicator */}
-      {saveStatus && (
-        <div className="fixed top-4 right-4 bg-white border border-gray-200 rounded-lg shadow-lg px-4 py-2 z-50">
-          <span className="text-sm font-medium text-gray-700">{saveStatus}</span>
-        </div>
-      )}
-
+    <div className={`flex h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {showDaySummary ? (
         <div className="flex-1 flex flex-col">
-          <div className="bg-white border-b border-gray-200 p-6 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">Day Summary</h1>
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b p-6 flex justify-between items-center`}>
+            <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Day Summary</h1>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => changeDaySummaryDate(-1)}
-                  className="p-2 hover:bg-gray-100 rounded-xl transition-all"
+                  className={`p-2 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} rounded-xl transition-all`}
                 >
-                  <ChevronLeft size={20} className="text-gray-600" />
+                  <ChevronLeft size={20} className={darkMode ? 'text-gray-300' : 'text-gray-600'} />
                 </button>
-                <div className="px-6 py-3 bg-gray-100 rounded-2xl font-semibold text-gray-900 min-w-[250px] text-center">
+                <div className={`px-6 py-3 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'} rounded-2xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} min-w-[250px] text-center`}>
                   {daySummaryDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                 </div>
                 <button
                   onClick={() => changeDaySummaryDate(1)}
-                  className="p-2 hover:bg-gray-100 rounded-xl transition-all"
+                  className={`p-2 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} rounded-xl transition-all`}
                 >
-                  <ChevronRight size={20} className="text-gray-600" />
+                  <ChevronRight size={20} className={darkMode ? 'text-gray-300' : 'text-gray-600'} />
                 </button>
                 <button
                   onClick={() => setDaySummaryDate(new Date())}
@@ -491,7 +454,7 @@ const WorkshopPlanner = () => {
               </div>
               <button 
                 onClick={() => setShowDaySummary(false)}
-                className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-full transition-all font-semibold shadow-sm hover:shadow-md transform hover:scale-105"
+                className={`px-6 py-3 ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-white' : 'text-gray-900'} rounded-full transition-all font-semibold shadow-sm hover:shadow-md transform hover:scale-105`}
               >
                 Back to Planner
               </button>
@@ -501,13 +464,13 @@ const WorkshopPlanner = () => {
           <div className="flex-1 overflow-auto p-6">
             <div className="max-w-7xl mx-auto">
               {getDayAllocations(daySummaryDate).length === 0 ? (
-                <div className="bg-white border-gray-200 rounded-3xl border p-12 text-center shadow-sm">
-                  <p className="text-gray-500 text-lg">No jobs scheduled for this day</p>
+                <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-3xl border p-12 text-center shadow-sm`}>
+                  <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} text-lg`}>No jobs scheduled for this day</p>
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <div className="bg-white border-gray-200 rounded-3xl border p-6 shadow-sm">
-                    <h2 className="text-lg font-bold text-gray-900 mb-4">Day Overview</h2>
+                  <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-3xl border p-6 shadow-sm`}>
+                    <h2 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>Day Overview</h2>
                     <div className="grid grid-cols-4 gap-4">
                       <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 shadow-md">
                         <div className="text-sm text-blue-100 font-medium">Total Personnel</div>
@@ -536,29 +499,29 @@ const WorkshopPlanner = () => {
                     </div>
                   </div>
 
-                  <div className="bg-white border-gray-200 rounded-3xl border shadow-sm overflow-hidden">
+                  <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-3xl border shadow-sm overflow-hidden`}>
                     <table className="w-full">
-                      <thead className="bg-gray-50 border-b border-gray-200">
+                      <thead className={`${darkMode ? 'bg-gray-750' : 'bg-gray-50'} border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                         <tr>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Personnel</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Time Slot</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Job Number</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Job Name</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Hours Allocated</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Job Progress</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Notes</th>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Personnel</th>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Time Slot</th>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Job Number</th>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Job Name</th>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Hours Allocated</th>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Job Progress</th>
+                          <th className={`px-6 py-4 text-left text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Notes</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
                         {getDayAllocations(daySummaryDate).map((alloc, index) => {
                           const percentComplete = alloc.totalJobHours > 0 
                             ? Math.round((alloc.allocatedJobHours / alloc.totalJobHours) * 100) 
                             : 0;
                           
                           return (
-                            <tr key={index} className="hover:bg-gray-50 transition-colors">
+                            <tr key={index} className={`${darkMode ? 'hover:bg-gray-750' : 'hover:bg-gray-50'} transition-colors`}>
                               <td className="px-6 py-4">
-                                <div className="font-semibold text-sm text-gray-900">{alloc.person}</div>
+                                <div className={`font-semibold text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>{alloc.person}</div>
                               </td>
                               <td className="px-6 py-4">
                                 <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
@@ -575,25 +538,25 @@ const WorkshopPlanner = () => {
                                     className="w-3 h-3 rounded-full shadow-sm" 
                                     style={{ backgroundColor: alloc.jobColor }}
                                   />
-                                  <span className="font-mono text-sm font-semibold text-gray-900">{alloc.job}</span>
+                                  <span className={`font-mono text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{alloc.job}</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 text-sm text-gray-700">{alloc.jobName}</td>
+                              <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{alloc.jobName}</td>
                               <td className="px-6 py-4">
-                                <span className="font-bold text-sm text-gray-900">{alloc.hours}h</span>
+                                <span className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>{alloc.hours}h</span>
                               </td>
                               <td className="px-6 py-4">
                                 <div className="flex items-center gap-2">
-                                  <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-[100px]">
+                                  <div className={`flex-1 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2 max-w-[100px]`}>
                                     <div 
                                       className="bg-emerald-500 h-2 rounded-full transition-all" 
                                       style={{ width: `${Math.min(percentComplete, 100)}%` }}
                                     />
                                   </div>
-                                  <span className="text-xs text-gray-600">{alloc.allocatedJobHours}/{alloc.totalJobHours}h</span>
+                                  <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{alloc.allocatedJobHours}/{alloc.totalJobHours}h</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
+                              <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} max-w-xs truncate`}>
                                 {alloc.notes || '-'}
                               </td>
                             </tr>
@@ -917,7 +880,7 @@ const WorkshopPlanner = () => {
                       </div>
                     </div>
                     <div className={`text-xs px-1.5 py-0.5 rounded ${isOverAllocated ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                      <span className="font-semibold">{remaining}h</span> remaining {isOverAllocated && '⚠️'}
+                      <span className="font-semibold">{remaining}h</span> remaining {isOverAllocated && 'âš ï¸'}
                     </div>
                   </div>
                 )}
