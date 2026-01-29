@@ -424,6 +424,159 @@ const WorkshopPlanner = () => {
 
   return (
     <div className={`flex h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      {/* JOBS SIDEBAR - ALWAYS VISIBLE */}
+      <div className="w-80 bg-white border-r border-stone-200 flex flex-col shadow-sm overflow-hidden">
+        <div className="p-3 border-b border-stone-200 bg-gradient-to-r from-stone-50 to-white flex-shrink-0">
+          <div className="flex justify-between items-center">
+            <h2 className="text-sm font-semibold text-stone-700 tracking-wide uppercase">Jobs</h2>
+            <div className="flex gap-1">
+              <button onClick={saveData} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Save">
+                <Save size={14} className="text-stone-600" />
+              </button>
+              <button onClick={loadData} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Load">
+                <Upload size={14} className="text-stone-600" />
+              </button>
+              <button onClick={addJob} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Add Job">
+                <Plus size={14} className="text-stone-600" />
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-2 space-y-2" style={{ maxHeight: 'calc(100vh - 60px)' }}>
+          {jobs.filter(j => !j.completed).map((job, index) => {
+            const allocated = getAllocatedHours(job.id);
+            const remaining = job.totalHours - allocated;
+            const isOverAllocated = remaining < 0;
+            
+            return (
+              <div
+                key={job.id}
+                draggable={editingJob !== job.id}
+                onDragStart={(e) => {
+                  if (editingJob !== job.id) {
+                    handleJobDragForReorder(index);
+                    handleJobDragStart(e, job.id);
+                  }
+                }}
+                onDragEnd={handleJobDragEnd}
+                onDragOver={(e) => {
+                  if (draggedJobIndex !== null) {
+                    e.preventDefault();
+                  }
+                }}
+                onDrop={(e) => {
+                  if (draggedJobIndex !== null) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleJobDropForReorder(index);
+                  }
+                }}
+                className={`border border-stone-200 rounded-lg p-2 ${editingJob !== job.id ? 'cursor-move hover:shadow-md hover:border-stone-300' : ''} transition-all bg-white ${draggedJobIndex === index ? 'opacity-50' : ''}`}
+                style={{ borderLeftWidth: '4px', borderLeftColor: job.color }}
+              >
+                {editingJob === job.id ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={job.number}
+                      onChange={(e) => updateJob(job.id, { number: e.target.value })}
+                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-stone-400"
+                      placeholder="000-0000"
+                    />
+                    <input
+                      type="text"
+                      value={job.name}
+                      onChange={(e) => updateJob(job.id, { name: e.target.value })}
+                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs font-medium focus:outline-none focus:ring-1 focus:ring-stone-400"
+                      placeholder="Job Name"
+                    />
+                    <input
+                      type="number"
+                      value={job.totalHours}
+                      onChange={(e) => updateJob(job.id, { totalHours: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-stone-400"
+                      placeholder="Total Hours"
+                    />
+                    <input
+                      type="color"
+                      value={job.color}
+                      onChange={(e) => updateJob(job.id, { color: e.target.value })}
+                      className="w-full h-8 border border-stone-300 rounded"
+                    />
+                    <textarea
+                      value={job.notes}
+                      onChange={(e) => updateJob(job.id, { notes: e.target.value })}
+                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-stone-400"
+                      placeholder="Notes"
+                      rows="2"
+                    />
+                    <button
+                      onClick={() => setEditingJob(null)}
+                      className="w-full px-2 py-1 bg-stone-700 text-white rounded text-xs hover:bg-stone-800 transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-xs text-stone-800">{job.number}</div>
+                        <div className="text-xs text-stone-600 truncate">{job.name}</div>
+                      </div>
+                      <div className="flex gap-0.5 ml-1 flex-shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleJobComplete(job.id);
+                          }}
+                          className="p-1 hover:bg-emerald-50 rounded transition-colors"
+                          title="Mark Complete"
+                        >
+                          <div className="w-3 h-3 border-2 border-emerald-600 rounded" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingJob(job.id);
+                          }}
+                          className="p-1 hover:bg-stone-100 rounded transition-colors"
+                          title="Edit"
+                        >
+                          <Edit2 size={12} className="text-stone-600" />
+                        </button>
+                        <button
+                          onClick={(e) => deleteJob(e, job.id)}
+                          className="p-1 hover:bg-red-50 rounded text-red-500 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 text-xs">
+                      <div className="flex-1 bg-stone-50 rounded px-1.5 py-0.5">
+                        <span className="text-stone-500">Total:</span>
+                        <span className="font-medium text-stone-700 ml-1">{job.totalHours}h</span>
+                      </div>
+                      <div className="flex-1 bg-stone-50 rounded px-1.5 py-0.5">
+                        <span className="text-stone-500">Used:</span>
+                        <span className="font-medium text-stone-700 ml-1">{allocated}h</span>
+                      </div>
+                    </div>
+                    <div className={`text-xs px-1.5 py-0.5 rounded ${isOverAllocated ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                      <span className="font-semibold">{remaining}h</span> remaining {isOverAllocated && '⚠️'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* MAIN CONTENT AREA */}
       {showDaySummary ? (
         <div className="flex-1 flex flex-col">
           <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b p-6 flex justify-between items-center`}>
@@ -739,156 +892,6 @@ const WorkshopPlanner = () => {
         </div>
       )}
 
-      <div className="w-80 bg-white border-r border-stone-200 flex flex-col shadow-sm overflow-hidden">
-        <div className="p-3 border-b border-stone-200 bg-gradient-to-r from-stone-50 to-white flex-shrink-0">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-semibold text-stone-700 tracking-wide uppercase">Jobs</h2>
-            <div className="flex gap-1">
-              <button onClick={saveData} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Save">
-                <Save size={14} className="text-stone-600" />
-              </button>
-              <button onClick={loadData} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Load">
-                <Upload size={14} className="text-stone-600" />
-              </button>
-              <button onClick={addJob} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors" title="Add Job">
-                <Plus size={14} className="text-stone-600" />
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto p-2 space-y-2" style={{ maxHeight: 'calc(100vh - 60px)' }}>
-          {jobs.filter(j => !j.completed).map((job, index) => {
-            const allocated = getAllocatedHours(job.id);
-            const remaining = job.totalHours - allocated;
-            const isOverAllocated = remaining < 0;
-            
-            return (
-              <div
-                key={job.id}
-                draggable={editingJob !== job.id}
-                onDragStart={(e) => {
-                  if (editingJob !== job.id) {
-                    handleJobDragForReorder(index);
-                    handleJobDragStart(e, job.id);
-                  }
-                }}
-                onDragEnd={handleJobDragEnd}
-                onDragOver={(e) => {
-                  if (draggedJobIndex !== null) {
-                    e.preventDefault();
-                  }
-                }}
-                onDrop={(e) => {
-                  if (draggedJobIndex !== null) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleJobDropForReorder(index);
-                  }
-                }}
-                className={`border border-stone-200 rounded-lg p-2 ${editingJob !== job.id ? 'cursor-move hover:shadow-md hover:border-stone-300' : ''} transition-all bg-white ${draggedJobIndex === index ? 'opacity-50' : ''}`}
-                style={{ borderLeftWidth: '4px', borderLeftColor: job.color }}
-              >
-                {editingJob === job.id ? (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={job.number}
-                      onChange={(e) => updateJob(job.id, { number: e.target.value })}
-                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-stone-400"
-                      placeholder="000-0000"
-                    />
-                    <input
-                      type="text"
-                      value={job.name}
-                      onChange={(e) => updateJob(job.id, { name: e.target.value })}
-                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs font-medium focus:outline-none focus:ring-1 focus:ring-stone-400"
-                      placeholder="Job Name"
-                    />
-                    <input
-                      type="number"
-                      value={job.totalHours}
-                      onChange={(e) => updateJob(job.id, { totalHours: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-stone-400"
-                      placeholder="Total Hours"
-                    />
-                    <input
-                      type="color"
-                      value={job.color}
-                      onChange={(e) => updateJob(job.id, { color: e.target.value })}
-                      className="w-full h-8 border border-stone-300 rounded"
-                    />
-                    <textarea
-                      value={job.notes}
-                      onChange={(e) => updateJob(job.id, { notes: e.target.value })}
-                      className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-stone-400"
-                      placeholder="Notes"
-                      rows="2"
-                    />
-                    <button
-                      onClick={() => setEditingJob(null)}
-                      className="w-full px-2 py-1 bg-stone-700 text-white rounded text-xs hover:bg-stone-800 transition-colors"
-                    >
-                      Done
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-xs text-stone-800">{job.number}</div>
-                        <div className="text-xs text-stone-600 truncate">{job.name}</div>
-                      </div>
-                      <div className="flex gap-0.5 ml-1 flex-shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleJobComplete(job.id);
-                          }}
-                          className="p-1 hover:bg-emerald-50 rounded transition-colors"
-                          title="Mark Complete"
-                        >
-                          <div className="w-3 h-3 border-2 border-emerald-600 rounded" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingJob(job.id);
-                          }}
-                          className="p-1 hover:bg-stone-100 rounded transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 size={12} className="text-stone-600" />
-                        </button>
-                        <button
-                          onClick={(e) => deleteJob(e, job.id)}
-                          className="p-1 hover:bg-red-50 rounded text-red-500 transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 text-xs">
-                      <div className="flex-1 bg-stone-50 rounded px-1.5 py-0.5">
-                        <span className="text-stone-500">Total:</span>
-                        <span className="font-medium text-stone-700 ml-1">{job.totalHours}h</span>
-                      </div>
-                      <div className="flex-1 bg-stone-50 rounded px-1.5 py-0.5">
-                        <span className="text-stone-500">Used:</span>
-                        <span className="font-medium text-stone-700 ml-1">{allocated}h</span>
-                      </div>
-                    </div>
-                    <div className={`text-xs px-1.5 py-0.5 rounded ${isOverAllocated ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                      <span className="font-semibold">{remaining}h</span> remaining {isOverAllocated && 'âš ï¸'}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       <div className="flex-1 flex flex-col">
         <div className="bg-white border-b border-stone-200 p-4 flex justify-between items-center shadow-sm">
@@ -987,10 +990,10 @@ const WorkshopPlanner = () => {
                 {dates.map(date => (
                   <th 
                     key={date.toISOString()} 
-                    className={`border-2 border-stone-200 p-3 min-w-[140px] ${isWeekend(date) ? 'bg-stone-100' : 'bg-white'}`}
+                    className={`border-2 border-stone-200 p-3 min-w-[140px] ${isWeekend(date) ? 'bg-gradient-to-br from-stone-200 to-stone-100' : 'bg-gradient-to-br from-slate-100 to-slate-50'}`}
                   >
-                    <div className="text-xs font-medium text-stone-500 uppercase tracking-wide">{getDayName(date)}</div>
-                    <div className={`text-base font-semibold mt-1 ${isWeekend(date) ? 'text-stone-600' : 'text-stone-800'}`}>
+                    <div className="text-xs font-medium text-slate-700 uppercase tracking-wide">{getDayName(date)}</div>
+                    <div className={`text-base font-semibold mt-1 ${isWeekend(date) ? 'text-slate-600' : 'text-slate-800'}`}>
                       {date.getDate()}
                     </div>
                   </th>
